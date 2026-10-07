@@ -1,5 +1,5 @@
 import { getSkills, saveNote, saveSkills } from './storage.js';
-import { deletePrivateFile, uploadPrivateFile } from './files.js';
+import { deleteSharedFile, uploadSharedFile } from './files.js';
 const $=selector=>document.querySelector(selector);
 const esc=value=>String(value??'').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 const presets={startup:['Startup','Remote','TypeScript'],fintech:['Fintech','High-Scale','Python'],enterprise:['Enterprise','Agile','Cloud']};
@@ -7,7 +7,7 @@ const rarities=['Common','Rare','Epic','Legendary'];
 let mode='boost',skills=getSkills(),generatedCard=null;
 
 export function renderRecruiter(){
-  const shared=new URLSearchParams(location.hash.split('?')[1]||'').get('k')?.split(',')||[],keywords=[0,1,2].map(i=>esc(shared[i]||'')),initialPreset=Object.entries(presets).find(([,values])=>values.every((value,index)=>value===(shared[index]||'')))?.[0];
+  const legacyParams=new URLSearchParams(location.hash.split('?')[1]||''),shared=new URLSearchParams(location.search).get('k')?.split(',')||legacyParams.get('k')?.split(',')||[],keywords=[0,1,2].map(i=>esc(shared[i]||'')),initialPreset=Object.entries(presets).find(([,values])=>values.every((value,index)=>value===(shared[index]||'')))?.[0];
   return `<div class="neural-backdrop" aria-hidden="true"><canvas id="neural-canvas"></canvas></div>
     <section class="surface recruiter-panel">
       <header class="expedition-heading">
@@ -18,9 +18,9 @@ export function renderRecruiter(){
       <section class="mission-block mission-target">
         <p class="mission-step"><span>01</span> Identify the company</p>
         <label class="company-input" for="company-name">Target company <span class="muted">(optional)</span></label>
-        <input id="company-name" maxlength="80" autocomplete="organization" placeholder="Name this connection">
+        <input id="company-name" maxlength="120" autocomplete="organization" placeholder="Name this connection">
         <label for="recruiter-name">Your name <span class="muted">(used for your thank-you)</span></label>
-        <input id="recruiter-name" maxlength="80" autocomplete="name" required placeholder="Name of recruiter submitting this audit">
+        <input id="recruiter-name" maxlength="120" autocomplete="name" required placeholder="Name of recruiter submitting this audit">
       </section>
       <section class="mission-block mission-signals">
         <p class="mission-step"><span>02</span> Decode its culture</p>
@@ -40,13 +40,14 @@ export function renderRecruiter(){
       </section>
       <fieldset class="referral-fields mission-block mission-ally">
         <legend>03 &nbsp; Referral intelligence <span class="muted">(optional)</span></legend>
+        <p class="recruiter-intro">RE-audits and attachments are shared with anyone who can access the Info Hub. Do not submit confidential or sensitive information.</p>
         <div class="referral-grid">
-          <label for="referral-name">Employee name<input id="referral-name" maxlength="80" autocomplete="name" placeholder="Who referred you?"></label>
-          <label for="referral-email">Work email<input id="referral-email" type="email" maxlength="120" autocomplete="email" placeholder="name@company.com"></label>
+          <label for="referral-name">Employee name<input id="referral-name" maxlength="120" autocomplete="name" placeholder="Who referred you?"></label>
+          <label for="referral-email">Work email<input id="referral-email" type="email" maxlength="254" autocomplete="email" placeholder="name@company.com"></label>
         </div>
         <label for="referral-context">Team or introduction context</label>
-        <textarea id="referral-context" maxlength="240" rows="2" placeholder="Role, team, or how they know you"></textarea>
-        <label for="audit-attachment">Private supporting file <span class="muted">(optional, PDF/DOC/DOCX/TXT, up to 10 MB)</span></label>
+        <textarea id="referral-context" maxlength="4000" rows="3" placeholder="Role, team, or how they know you"></textarea>
+        <label for="audit-attachment">Supporting file <span class="muted">(optional, PDF/DOC/DOCX/TXT, up to 10 MB)</span></label>
         <input id="audit-attachment" type="file" accept=".pdf,.doc,.docx,.txt,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
       </fieldset>
       <section class="mission-block mission-transmit">
@@ -62,7 +63,7 @@ export function renderRecruiter(){
       <details class="skills-details mission-skills">
         <summary>Candidate skill loadout</summary>
         <label for="skills">Skills, separated by commas</label>
-        <input id="skills" value="${esc(skills)}" aria-label="Candidate skill set">
+        <input id="skills" maxlength="500" value="${esc(skills)}" aria-label="Candidate skill set">
       </details>
     </section>
     <section class="deck-wrap" id="deck" aria-live="polite"></section>`;
@@ -86,7 +87,8 @@ export async function generateCard(){
   const recruiterName=$('#recruiter-name').value.trim();
   if(!recruiterName){status('Enter your name to launch your pitch card.');$('#recruiter-name').focus();return;}
   speakLaunchThanks(recruiterName);
-  skills=$('#skills').value.trim()||skills;saveSkills(skills);
+  skills=$('#skills').value.trim()||skills;
+  if(!await saveSkills(skills)){status('Could not sync candidate skills. Check your Firebase connection and try again.');return;}
   const button=$('#generate-card'),mission=$('#mission-status');button.disabled=true;button.textContent='Mapping signals...';mission.dataset.state='transmitting';$('#mission-status-text').textContent='Tuning your response to the signal map';deck.innerHTML='<p class="card-status">Mapping culture signals and tuning your response...</p>';
   try{const result=await createCard(keywords);generatedCard={keywords,result,mode,number:Math.floor(Math.random()*900+100)};renderCard();mission.dataset.state='complete';$('#mission-status-text').textContent='Transmission complete. Your pitch is ready.';}finally{button.disabled=false;button.textContent='Launch pitch card';}
 }
@@ -98,7 +100,7 @@ function renderCard(){
 }
 
 function attachTilt(){const card=$('#trading-card'),update=(clientX,clientY)=>{const bounds=card.getBoundingClientRect(),x=(clientX-bounds.left)/bounds.width-.5,y=(clientY-bounds.top)/bounds.height-.5;card.style.transform=`rotateY(${x*20}deg) rotateX(${-y*20}deg)`;card.style.setProperty('--mx',`${(x+.5)*100}%`);};card.addEventListener('pointermove',event=>update(event.clientX,event.clientY));card.addEventListener('pointerleave',()=>{card.style.transform='';});card.addEventListener('pointercancel',()=>{card.style.transform='';});}
-function shareUrl(){const params=new URLSearchParams();params.set('k',generatedCard.keywords.join(','));return`${location.origin}${location.pathname}#/recruiter?${params}`;}
+function shareUrl(){const params=new URLSearchParams();params.set('k',generatedCard.keywords.join(','));return`${location.origin}/recruiterhub.html?${params}`;}
 async function copyText(value){if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(value);return true;}catch{/* Fall through when clipboard permission is denied. */}}const field=document.createElement('textarea');field.value=value;field.setAttribute('readonly','');field.style.position='fixed';field.style.opacity='0';document.body.append(field);field.select();const copied=document.execCommand('copy');field.remove();return copied;}
 export async function copyPitch(){if(!generatedCard)return;const{result}=generatedCard,copied=await copyText(`${result.title}\n\n"${result.pitch}"\n\nGenerated at Neural Hub`);status(copied?'Pitch copied to clipboard.':'Clipboard access is unavailable in this browser.');}
 export async function copyShareLink(){if(!generatedCard)return;const copied=await copyText(shareUrl());status(copied?'Share link copied with your keywords.':'Clipboard access is unavailable in this browser.');}
@@ -121,8 +123,8 @@ export async function saveCardToHub(){
   if(!recruiterName){status('Add your name before submitting the RE-audit.');$('#recruiter-name').focus();return;}
   const company=$('#company-name').value.trim()||'Recruiter Lead',{keywords,result}=generatedCard,referralName=$('#referral-name').value.trim(),referralEmail=$('#referral-email').value.trim(),referralContext=$('#referral-context').value.trim();
   const file=$('#audit-attachment').files[0];let attachmentPath='';
-  if(file){status(`Uploading ${file.name} to private storage...`);try{attachmentPath=await uploadPrivateFile(file);}catch(error){status(error.message||'The private attachment could not be uploaded.');return;}}
+  if(file){status(`Uploading ${file.name}...`);try{attachmentPath=await uploadSharedFile(file);}catch(error){status(error.message||'The attachment could not be uploaded.');return;}}
   const saved=await saveNote({id:crypto.randomUUID(),company,site:'',offer:'Met at career fair showcase',job:`Generated pitch card: ${result.title}`,notes:`Keywords used: ${keywords.join(', ')}\n\n${result.pitch}`,status:'Interview',source:'recruiter-re-audit',submittedAt:new Date().toISOString(),recruiterName,referralName,referralEmail,referralContext,attachmentPath});
-  if(!saved){if(attachmentPath){try{await deletePrivateFile(attachmentPath);}catch{}}status('Could not submit this RE-audit. Check your sign-in and connection, then try again.');return;}
-  status(`RE-audit submitted for ${company}. Info Hub users can review the referral.`);
+  if(!saved){if(attachmentPath){try{await deleteSharedFile(attachmentPath);}catch{}}status('Could not save this RE-audit. Check your Firebase connection and try again.');return;}
+  status(`RE-audit saved for ${company}. It is now available in the Info Hub.`);
 }

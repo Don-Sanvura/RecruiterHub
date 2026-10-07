@@ -1,6 +1,6 @@
 # RecruiterHub
 
-A responsive recruiter experience and company Info Hub. Recruiters submit RE-audits without entering credentials; Info Hub users sign in to review and manage records. Supabase anonymous Auth sessions and Postgres provide durable storage and enforce access with row-level security.
+A responsive Recruiter Hub and company Info Hub. Firestore keeps company records and candidate skills in sync in real time across devices. Firebase Storage stores shared recruiter attachments. The pages do not require a user sign-in.
 
 ## Local development
 
@@ -8,42 +8,94 @@ Requirements: Node.js 20 or newer and npm.
 
 ```powershell
 npm ci
+Copy-Item .env.example .env.local
+```
+
+Fill in the Firebase web app values in `.env.local`, then run:
+
+```powershell
 npm run dev
 ```
 
-Without Supabase environment values, Vite development mode runs a clearly marked local preview backed by browser storage. This preview is not persistent across devices. In production, the recruiter route silently creates an anonymous Supabase session for user-scoped private uploads. Info Hub remains role-protected.
+## Separate page links
 
-## Configure Supabase
+- Recruiter Hub: `https://your-domain/recruiterhub.html`
+- Info Hub: `https://your-domain/infohub.html`
 
-1. Create a Supabase project.
-2. In the SQL editor, run [`supabase/schema.sql`](supabase/schema.sql).
-3. Enable anonymous sign-ins in Supabase Auth. Create Info Hub accounts in Supabase Auth and set their trusted `app_metadata.role` to `info` using the dashboard or a trusted server/admin client. Example SQL for assigning that role:
+The Info Hub has links back to the home page and Recruiter Hub. Its **Download Excel** action exports a workbook with summary, company, and recruiter-audit sheets.
 
-   ```sql
-   update auth.users
-   set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"info"}'::jsonb
-   where email = 'info-admin@example.com';
+## Firebase setup
+
+1. Create a Firebase project, register a Web app, enable Cloud Firestore, and create a Firebase Storage bucket.
+2. Copy the Web app configuration into `.env.local`, matching the variable names in `.env.example`. These Firebase web settings are visible in the browser; never put service-account keys in the frontend or a `VITE_` variable.
+3. Deploy the included Firestore and Storage rules. Install/use the Firebase CLI, select the project, and deploy the rules:
+
+   ```powershell
+   npx firebase-tools login
+   npx firebase-tools use --add
+   npx firebase-tools deploy --only firestore:rules,storage
    ```
 
-   Never place a Supabase service-role key in a `VITE_` variable or browser code.
-4. Copy `.env.example` to `.env.local`, then set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to the project URL and publishable key. These browser values are public; the table's RLS policies are the security boundary.
-5. In Supabase Auth URL settings, set the deployed app URL and allow that URL for Info Hub email sign-in redirects.
+4. Build and deploy `dist/`. Configure the same `VITE_FIREBASE_*` variables in the hosting provider before building.
 
-The `info` role can read, add, edit, and delete company records. Anonymous recruiter sessions can insert only `recruiter-re-audit` records; they have no select, update, or delete policy. Audit records include recruiter identity, employee referral details, pitch, attachment path, and submission time. Info Hub listens for database changes and refreshes live.
+Firestore listeners update the Info Hub when company records change, including changes made from another device. Candidate skills and uploaded attachments are shared through Firestore and Firebase Storage too. On first load, existing company records in this browser are imported to Firestore; locally stored attachments are uploaded during that migration. Keep the browser profile containing your old data available until the import has completed.
 
-## Private attachments
+## Firestore data schema
 
-Optional PDF, DOC, DOCX, or TXT files (up to 10 MB) upload to the private `user-files` bucket under `<auth-user-id>/<random-id>-<filename>`. The schema permits anonymous recruiter sessions to upload only into their own Auth-ID folder and allows only Info-role users to read files. Info Hub creates 60-second signed URLs; it never uses public URLs. Keep the bucket private and enable anonymous sign-ins in Supabase Auth. Add CAPTCHA or rate limiting before broadly publishing the anonymous submission form.
+Firestore is schemaless; [`firestore.rules`](firestore.rules) validates writes against these document shapes:
+
+### `company_records/{recordId}`
+
+`recordId` must equal the document's `id`.
+
+```json
+{
+  "id": "record-uuid",
+  "company": "Example Company",
+  "site": "https://example.com",
+  "offer": "Company products and services",
+  "job": "Role or career notes",
+  "notes": "Research notes or generated pitch",
+  "status": "Researching",
+  "source": "info-hub",
+  "recruiterName": "",
+  "referralName": "",
+  "referralEmail": "",
+  "referralContext": "",
+  "attachmentPath": "",
+  "submittedAt": null,
+  "updatedAt": 1791345000000
+}
+```
+
+`source` is either `info-hub` or `recruiter-re-audit`. The recruiter fields, attachment path, and submission date are populated by RE-audit submissions; ordinary research records use empty strings and a null submission date.
+
+All fields shown in the example are required by the Firestore rules. Text limits are: `id` 128, `company` 120, `site` 2,000, `offer` and `job` 4,000 each, `notes` 10,000, `status` 40, `recruiterName` and `referralName` 120 each, `referralEmail` 254, `referralContext` 4,000, and `attachmentPath` 2,048 characters. `updatedAt` is a Unix timestamp in milliseconds; `submittedAt` is an ISO date string or `null`.
+
+### `hub_settings/candidate`
+
+```json
+{
+  "skills": "full-stack engineering, AI/LLM integration",
+  "updatedAt": 1791345000000
+}
+```
+
+Both fields are required; `skills` is limited to 500 characters and `updatedAt` is a Unix timestamp in milliseconds.
+
+Attachments are stored in Firebase Storage at `attachments/{unique-filename}`; the download URL is saved as `attachmentPath` on the related record.
+
+## Public access warning
+
+The supplied rules allow anyone with the app/project identifiers to read, add, edit, and delete company records and attachments without signing in. This meets the no-login shared-access requirement, but the data is public and can be changed by visitors. Do not store confidential or sensitive information. Enable Firebase App Check and monitoring before broad public use.
 
 ## Production deployment
-
-Build the static site:
 
 ```powershell
 npm ci
 npm run build
 ```
 
-Deploy the generated `dist/` directory to a static host such as Vercel, Netlify, or Cloudflare Pages. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as build-time environment variables in the host, then rebuild. The application uses hash routes (`#/recruiter`, `#/hub`), so host-side rewrite rules are not required. A production build without Supabase values shows a setup screen instead of exposing local demo routes.
+Deploy the generated `dist/` directory to Firebase Hosting or another static host. Firebase web config variables must be present at build time.
 
 The spoken submission thank-you uses the browser Speech Synthesis API when available and leaves an on-screen confirmation as fallback. Voice selection and playback depend on the user's browser/device settings.

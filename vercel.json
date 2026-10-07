@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/info",
+      "destination": "/infohub.html"
+    },
+    {
+      "source": "/recruiter",
+      "destination": "/recruiterhub.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

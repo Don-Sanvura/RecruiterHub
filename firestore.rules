@@ -1,0 +1,64 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function validRecord(data) {
+      return data.keys().hasAll([
+          'id', 'company', 'site', 'offer', 'job', 'notes', 'status', 'source',
+          'recruiterName', 'referralName', 'referralEmail', 'referralContext',
+          'attachmentPath', 'submittedAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'company', 'site', 'offer', 'job', 'notes', 'status', 'source',
+          'recruiterName', 'referralName', 'referralEmail', 'referralContext',
+          'attachmentPath', 'submittedAt', 'updatedAt'
+        ])
+        && data.id is string
+        && data.id.size() <= 128
+        && data.company is string
+        && data.company.size() > 0
+        && data.company.size() <= 120
+        && data.site is string
+        && data.site.size() <= 2000
+        && data.offer is string
+        && data.offer.size() <= 4000
+        && data.job is string
+        && data.job.size() <= 4000
+        && data.notes is string
+        && data.notes.size() <= 10000
+        && data.status is string
+        && data.status.size() <= 40
+        && data.source in ['info-hub', 'recruiter-re-audit']
+        && data.recruiterName is string
+        && data.recruiterName.size() <= 120
+        && data.referralName is string
+        && data.referralName.size() <= 120
+        && data.referralEmail is string
+        && data.referralEmail.size() <= 254
+        && data.referralContext is string
+        && data.referralContext.size() <= 4000
+        && data.attachmentPath is string
+        && data.attachmentPath.size() <= 2048
+        && (data.submittedAt == null || data.submittedAt is string)
+        && data.updatedAt is number;
+    }
+
+    match /company_records/{recordId} {
+      allow read: if true;
+      allow create, update: if recordId == request.resource.data.id
+        && validRecord(request.resource.data);
+      allow delete: if true;
+    }
+
+    match /hub_settings/{settingId} {
+      allow read: if true;
+      allow create, update: if settingId == 'candidate'
+        && request.resource.data.keys().hasAll(['skills', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['skills', 'updatedAt'])
+        && request.resource.data.skills is string
+        && request.resource.data.skills.size() <= 500
+        && request.resource.data.updatedAt is number;
+      allow delete: if true;
+    }
+  }
+}
