@@ -33,6 +33,20 @@ export async function signIn(email, password) {
   return data.user;
 }
 
+export async function requestPasswordReset(email) {
+  if (!supabase) throw new Error('Authentication is not configured yet.');
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/?reset-password=1`
+  });
+  if (error) throw error;
+}
+
+export async function updatePassword(password) {
+  if (!supabase) throw new Error('Authentication is not configured yet.');
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
+
 export async function signOut() {
   if (!supabase) return;
   const { error } = await supabase.auth.signOut();

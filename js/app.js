@@ -1,6 +1,6 @@
 import { clearHubLinks, deleteHubNode, drawHubLinks, openNodeDialog, renderHub, saveDialogNode, toggleAuditView } from './hub.js';
 import { applyPreset, copyPitch, copyShareLink, generateCard, renderRecruiter, saveCardToHub, setMode, shareCard, updateMissionStatus } from './recruiter.js';
-import { ensureAnonymousSession, getCurrentUser, hasRole, signIn, signOut } from './auth.js';
+import { ensureAnonymousSession, getCurrentUser, hasRole, requestPasswordReset, signIn, signOut, updatePassword } from './auth.js';
 import { getTemporaryFileUrl } from './files.js';
 import { mountNeuralNetwork } from './neural-network.js';
 import { isLocalDemo, isSupabaseConfigured } from './supabase-client.js';
@@ -46,7 +46,11 @@ function landing() {
 function loginPage(role) {
 	const title = role === 'info' ? 'Info Hub sign in' : 'Recruiter sign in';
 	const signUpLink = role === 'recruiter' && isSupabaseConfigured ? '<p class="auth-switch">New recruiter? <a href="#/signup?role=recruiter">Create an account</a></p>' : '';
-	return `${navigation()}<section class="surface auth-panel"><p class="eyebrow">Neural Hub access</p><h1>${title}</h1><p class="auth-copy">Use the account assigned to your role. Recruiter accounts can submit referrals but cannot access Info Hub records.</p><form id="login-form" data-role="${role}"><label for="login-email">Email</label><input id="login-email" name="email" type="email" autocomplete="username" required><label for="login-password">Password</label><input id="login-password" name="password" type="password" autocomplete="current-password" required><button class="button button-primary" type="submit">Sign in</button><p class="form-feedback" id="login-feedback" role="status" aria-live="polite"></p></form>${signUpLink}</section>`;
+	return `${navigation()}<section class="surface auth-panel"><p class="eyebrow">Neural Hub access</p><h1>${title}</h1><p class="auth-copy">Use the account assigned to your role. Recruiter accounts can submit referrals but cannot access Info Hub records.</p><form id="login-form" data-role="${role}"><label for="login-email">Email</label><input id="login-email" name="email" type="email" autocomplete="username" required><label for="login-password">Password</label><input id="login-password" name="password" type="password" autocomplete="current-password" required><button class="button button-primary" type="submit">Sign in</button><button class="button button-quiet" type="button" data-action="reset-password">Forgot password?</button><p class="form-feedback" id="login-feedback" role="status" aria-live="polite"></p></form>${signUpLink}</section>`;
+}
+
+function passwordResetPage() {
+	return `${navigation()}<section class="surface auth-panel"><p class="eyebrow">Account recovery</p><h1>Set a new password</h1><p class="auth-copy">Choose a new password for your Info Hub account.</p><form id="password-reset-form"><label for="new-password">New password</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" required><label for="confirm-password">Confirm new password</label><input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required><button class="button button-primary" type="submit">Update password</button><p class="form-feedback" id="reset-feedback" role="status" aria-live="polite"></p></form></section>`;
 }
 
 function accessDenied() {
@@ -97,6 +101,17 @@ async function renderRoute() {
 	disposeCurrentView();
 	document.body.classList.toggle('recruiter-active', path === '/recruiter');
 	document.body.classList.toggle('hub-active', path === '/hub');
+
+	if (new URLSearchParams(location.search).get('reset-password') === '1') {
+		try {
+			if (!await getCurrentUser()) throw new Error('This password reset link is invalid or has expired. Request a new one from the sign-in page.');
+		} catch (error) {
+			app.innerHTML = `${navigation()}<section class="surface auth-panel"><p class="eyebrow">Account recovery</p><h1>Could not verify this reset link.</h1><p class="auth-copy">This password reset link is invalid or has expired. Request a new one from the sign-in page.</p><a class="button button-primary" href="#/login?role=info">Return to sign in</a></section>`;
+			return;
+		}
+		app.innerHTML = passwordResetPage();
+		return;
+	}
 
 	if (path === '/login') {
 		if (!isSupabaseConfigured && !isLocalDemo) {
@@ -178,6 +193,24 @@ app.addEventListener('click', async event => {
 	const button = event.target.closest('[data-action]');
 	if (!button) return;
 	const { action } = button.dataset;
+	if (action === 'reset-password') {
+		const form = document.querySelector('#login-form');
+		const feedback = form.querySelector('#login-feedback');
+		const email = form.elements.email.value.trim();
+		if (!email) {
+			form.elements.email.focus();
+			feedback.textContent = 'Enter your email address first, then request a password reset.';
+			return;
+		}
+		feedback.textContent = '';
+		try {
+			await requestPasswordReset(email);
+			feedback.textContent = 'If an account exists for that email, a password reset link has been sent. Check your inbox.';
+		} catch (error) {
+			feedback.textContent = error.message || 'Could not request a password reset. Try again.';
+		}
+		return;
+	}
 	if (action === 'sign-out') {
 		try { await signOut(); } finally { clearNotes(); location.hash = '#/'; }
 	}
@@ -218,6 +251,25 @@ app.addEventListener('input', event => {
 });
 
 app.addEventListener('submit', async event => {
+	if (event.target.id === 'password-reset-form') {
+		event.preventDefault();
+		const form = event.target;
+		const feedback = form.querySelector('#reset-feedback');
+		const password = form.elements.password.value;
+		if (password !== form.elements.confirmPassword.value) {
+			feedback.textContent = 'The passwords do not match.';
+			return;
+		}
+		feedback.textContent = '';
+		try {
+			await updatePassword(password);
+			feedback.textContent = 'Password updated. Redirecting to sign in...';
+			setTimeout(() => { location.href = `${location.pathname}#/login?role=info`; }, 1200);
+		} catch (error) {
+			feedback.textContent = error.message || 'Could not update your password. Request a new reset link and try again.';
+		}
+		return;
+	}
 	if (event.target.id !== 'login-form') return;
 	event.preventDefault();
 	const form = event.target;
