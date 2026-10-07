@@ -1,20 +1,10 @@
-import {
-	collection,
-	deleteDoc,
-	doc,
-	getDoc,
-	getDocs,
-	onSnapshot,
-	setDoc
-} from 'firebase/firestore';
-import { database, firebaseConfigured } from './firebase-client.js';
-import { uploadLegacyAttachment } from './files.js';
+import { apiRequest, requestBody } from './api.js';
+import { deleteSharedFile, uploadLegacyAttachment } from './files.js';
 
 const NOTES_KEY = 'hub.notes';
 const SKILLS_KEY = 'hub.skills';
-const RECORDS_COLLECTION = 'company_records';
-const SETTINGS_COLLECTION = 'hub_settings';
 const DEFAULT_SKILLS = 'full-stack engineering, AI/LLM integration, shipping fast';
+const SYNC_INTERVAL = 30_000;
 
 function readLocalNotes() {
 	try {
@@ -29,19 +19,25 @@ function writeLocalNotes(saved) {
 	try {
 		localStorage.setItem(NOTES_KEY, JSON.stringify(saved));
 	} catch {
-		// Firestore remains the durable source of truth.
+		console.warn('Could not cache shared company records in this browser.');
+	}
+}
+
+function writeLocalSkills(value) {
+	try {
+		localStorage.setItem(SKILLS_KEY, value);
+	} catch {
+		console.warn('Could not cache candidate skills in this browser.');
 	}
 }
 
 let notes = readLocalNotes();
 let skills = DEFAULT_SKILLS;
 let migrationPromise;
+let lastStorageError = '';
 
 export function getNotes() { return notes; }
-
-function notesFromSnapshot(snapshot) {
-	return snapshot.docs.map(item => ({ ...item.data(), id: item.id }));
-}
+export function getLastStorageError() { return lastStorageError; }
 
 function normalizeNote(note) {
 	return {
@@ -63,24 +59,40 @@ function normalizeNote(note) {
 	};
 }
 
-async function migrateLocalNotes(remoteNotes) {
+function applyServerData(data) {
+	notes = data.notes;
+	skills = data.skills || DEFAULT_SKILLS;
+	writeLocalNotes(notes);
+	writeLocalSkills(skills);
+}
+
+async function migrateLocalNotes(remoteNotes, cachedNotes) {
 	if (migrationPromise) return migrationPromise;
 	const remoteIds = new Set(remoteNotes.map(note => String(note.id)));
-	const localNotes = readLocalNotes().filter(note => !remoteIds.has(String(note.id)));
+	const localNotes = cachedNotes.filter(note => !remoteIds.has(String(note.id)));
 	if (!localNotes.length) return remoteNotes;
 
 	migrationPromise = (async () => {
 		for (const localNote of localNotes) {
 			const note = normalizeNote(localNote);
-			if (note.attachmentPath && !/^https?:\/\//i.test(note.attachmentPath)) {
+			let uploadedAttachment = '';
+			if (note.attachmentPath && !/^https?:\/\//i.test(note.attachmentPath) && !note.attachmentPath.startsWith('github:')) {
 				note.attachmentPath = await uploadLegacyAttachment(note.attachmentPath, note.id);
+				uploadedAttachment = note.attachmentPath;
 			}
-			await setDoc(doc(database, RECORDS_COLLECTION, note.id), note);
-			remoteIds.add(note.id);
+			if (!await saveNote(note)) {
+				if (uploadedAttachment) {
+					try {
+						await deleteSharedFile(uploadedAttachment);
+					} catch (error) {
+						console.error('Could not remove an attachment after its record migration failed.', error);
+					}
+				}
+				throw new Error(lastStorageError || `Could not migrate the saved record for ${note.company}.`);
+			}
 		}
-		return notesFromSnapshot(await getDocs(collection(database, RECORDS_COLLECTION)));
+		return notes;
 	})();
-
 	try {
 		return await migrationPromise;
 	} finally {
@@ -89,93 +101,99 @@ async function migrateLocalNotes(remoteNotes) {
 }
 
 export async function loadNotes() {
-	if (!firebaseConfigured) throw new Error('Configure Firebase to enable shared, real-time records. See README.md.');
-	const snapshot = await getDocs(collection(database, RECORDS_COLLECTION));
-	notes = await migrateLocalNotes(notesFromSnapshot(snapshot));
-	writeLocalNotes(notes);
+	const cachedNotes = readLocalNotes();
+	const data = await apiRequest('/api/data');
+	applyServerData(data);
+	await migrateLocalNotes(data.notes, cachedNotes);
 	return notes;
 }
 
 export async function saveNote(note) {
-	if (!firebaseConfigured) return false;
 	try {
-		const updatedNote = normalizeNote(note);
-		await setDoc(doc(database, RECORDS_COLLECTION, updatedNote.id), updatedNote);
-		const index = notes.findIndex(item => item.id === updatedNote.id);
-		notes = index === -1
-			? [...notes, updatedNote]
-			: notes.map(item => item.id === updatedNote.id ? updatedNote : item);
-		writeLocalNotes(notes);
+		const data = await apiRequest('/api/data', {
+			method: 'POST',
+			body: requestBody({ action: 'saveNote', note: normalizeNote(note) })
+		});
+		applyServerData(data);
+		lastStorageError = '';
 		return true;
 	} catch (error) {
-		console.error('Could not save the record to Firestore.', error);
+		lastStorageError = error.message;
+		console.error('Could not save the record to the GitHub repository.', error);
 		return false;
 	}
 }
 
 export async function removeNote(id) {
-	if (!firebaseConfigured) return false;
 	try {
-		await deleteDoc(doc(database, RECORDS_COLLECTION, String(id)));
-		notes = notes.filter(note => note.id !== id);
-		writeLocalNotes(notes);
+		const data = await apiRequest(`/api/data?id=${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+		applyServerData(data);
+		lastStorageError = '';
 		return true;
 	} catch (error) {
-		console.error('Could not delete the record from Firestore.', error);
+		lastStorageError = error.message;
+		console.error('Could not delete the record from the GitHub repository.', error);
 		return false;
 	}
 }
 
+function subscribeToData(callback, onError) {
+	let stopped = false;
+	let inFlight = false;
+	let previousNotes = JSON.stringify(notes);
+	let previousSkills = skills;
+	const sync = async () => {
+		if (stopped || inFlight) return;
+		inFlight = true;
+		try {
+			const data = await apiRequest('/api/data');
+			if (stopped) return;
+			applyServerData(data);
+			const changed = previousNotes !== JSON.stringify(notes) || previousSkills !== skills;
+			previousNotes = JSON.stringify(notes);
+			previousSkills = skills;
+			if (changed) callback(data);
+		} catch (error) {
+			if (!stopped) onError(error);
+		} finally {
+			inFlight = false;
+		}
+	};
+	const timer = setInterval(() => { void sync(); }, SYNC_INTERVAL);
+	return () => {
+		stopped = true;
+		clearInterval(timer);
+	};
+}
+
 export function subscribeToRecordChanges(callback, onError = () => {}) {
-	if (!firebaseConfigured) return () => {};
-	return onSnapshot(collection(database, RECORDS_COLLECTION), snapshot => {
-		notes = notesFromSnapshot(snapshot);
-		writeLocalNotes(notes);
-		callback();
-	}, onError);
+	return subscribeToData(callback, onError);
 }
 
 export function getSkills() { return skills; }
 
 export async function loadSkills() {
-	if (!firebaseConfigured) throw new Error('Configure Firebase to sync candidate skills.');
-	const settingsRef = doc(database, SETTINGS_COLLECTION, 'candidate');
-	const snapshot = await getDoc(settingsRef);
-	if (snapshot.exists()) {
-		skills = snapshot.data().skills || DEFAULT_SKILLS;
-	} else {
-		try {
-			skills = localStorage.getItem(SKILLS_KEY) || DEFAULT_SKILLS;
-		} catch {
-			skills = DEFAULT_SKILLS;
-		}
-		await setDoc(settingsRef, { skills, updatedAt: Date.now() });
-	}
+	const data = await apiRequest('/api/data');
+	applyServerData(data);
 	return skills;
 }
 
 export async function saveSkills(value) {
-	skills = value;
 	try {
-		localStorage.setItem(SKILLS_KEY, value);
-	} catch {
-		// Firestore remains the durable source of truth.
-	}
-	if (!firebaseConfigured) return false;
-	try {
-		await setDoc(doc(database, SETTINGS_COLLECTION, 'candidate'), { skills: value, updatedAt: Date.now() });
+		const data = await apiRequest('/api/data', {
+			method: 'POST',
+			body: requestBody({ action: 'saveSkills', skills: value })
+		});
+		applyServerData(data);
+		lastStorageError = '';
 		return true;
 	} catch (error) {
-		console.error('Could not save candidate skills to Firestore.', error);
+		lastStorageError = error.message;
+		console.error('Could not save candidate skills to the GitHub repository.', error);
 		return false;
 	}
 }
 
 export function subscribeToSkillChanges(callback, onError = () => {}) {
-	if (!firebaseConfigured) return () => {};
-	return onSnapshot(doc(database, SETTINGS_COLLECTION, 'candidate'), snapshot => {
-		if (!snapshot.exists()) return;
-		skills = snapshot.data().skills || DEFAULT_SKILLS;
-		callback(skills);
-	}, onError);
+	return subscribeToData(data => callback(data.skills), onError);
 }

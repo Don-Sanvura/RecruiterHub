@@ -1,101 +1,64 @@
 # RecruiterHub
 
-A responsive Recruiter Hub and company Info Hub. Firestore keeps company records and candidate skills in sync in real time across devices. Firebase Storage stores shared recruiter attachments. The pages do not require a user sign-in.
+RecruiterHub combines a company research hub with a recruiter pitch-card studio. Vercel hosts the static pages and server-side API. The API authenticates authorized GitHub users with OAuth and stores shared records, candidate skills, and attachments in the configured GitHub repository.
+
+## Set up GitHub storage
+
+1. Create and initialize a dedicated **private data repository** (the template uses `Don-Sanvura/recruiterhub-data`) with a README and a `main` default branch. Keep it separate from the Vercel app repository so saved records do not trigger app deployments. Choose a trusted GitHub account for the OAuth connection. GitHub OAuth Apps request the broad `repo` permission; use an account that does not own unrelated sensitive repositories.
+2. Create a GitHub OAuth App under **GitHub Settings → Developer settings → OAuth Apps**:
+   - **Homepage URL:** the app's canonical URL, for example `https://your-app.vercel.app`
+   - **Authorization callback URL:** that same URL followed by `/api/auth/callback`
+   - Copy its client ID and generate a client secret.
+3. In Vercel, import this repository as a project and set these **server-side** environment variables for Development, Preview, and Production as appropriate:
+
+   | Variable | Value |
+   | --- | --- |
+   | `APP_URL` | The canonical app origin, with no trailing slash |
+   | `GITHUB_CLIENT_ID` | OAuth App client ID |
+   | `GITHUB_CLIENT_SECRET` | OAuth App client secret |
+   | `GITHUB_ALLOWED_USERS` | Comma-separated GitHub logins allowed to use the app |
+   | `GITHUB_REPOSITORY` | Repository that holds the data, in `owner/repository` form |
+   | `GITHUB_BRANCH` | Branch where data commits are written, usually `main` |
+   | `SESSION_SECRET` | A random secret of at least 32 characters |
+
+   Generate a session secret with `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"`. Never add OAuth secrets or session secrets to client-side `VITE_` variables or commit them.
+4. Set Vercel's **Production** `APP_URL` to the same origin configured in the OAuth App, save the variables, and redeploy. For local development, use a separate GitHub OAuth App whose callback URL is `http://localhost:3000/api/auth/callback`; copy its credentials into the ignored `.env.local` file and set `APP_URL=http://localhost:3000`.
+
+The OAuth callback validates a one-time state value, checks the GitHub login against `GITHUB_ALLOWED_USERS`, and places the encrypted OAuth session in an HttpOnly cookie. The browser never receives the GitHub access token. All data-changing API calls also validate the request origin. Configure the GitHub account and allowed-user list carefully: a compromised OAuth account with `repo` permission could change repository contents.
+
+On first save, the server creates `.recruiterhub/data.json` in the configured repository. Each successful data or attachment change is a GitHub commit. The JSON file is limited to 900 KB, and attachments are limited to 700 KB each to fit GitHub's contents API reliably. The app checks for updates every 30 seconds; it is shared across devices, but is not an instant real-time database. GitHub API limits, repository permissions, or a branch protection rule that blocks the OAuth account from writing will prevent changes from saving.
+
+Do not put confidential or regulated information in a repository with public visibility. A private repository is strongly recommended.
 
 ## Local development
 
-Requirements: Node.js 20 or newer and npm.
+Requirements: Node.js 20 or newer, npm, a Vercel account/CLI session, a linked Vercel project, and the server environment variables above.
 
 ```powershell
 npm ci
-Copy-Item .env.example .env.local
+if (-not (Test-Path .env.local)) { Copy-Item .env.example .env.local }
 ```
 
-Fill in the Firebase web app values in `.env.local`, then run:
+Fill in `.env.local` with the development OAuth App and repository values. If an older Firebase `.env.local` exists, replace its contents with the GitHub variables in `.env.example`. Then run the Vercel development server. It serves both the pages and `/api` functions:
 
 ```powershell
+npx vercel@62.7.0 login
+npx vercel@62.7.0 link
 npm run dev
 ```
 
-## Separate page links
+`npm run build` builds the static frontend. Vercel deploys the `api/` serverless functions with it. A static-only preview server does not provide the OAuth or data API; test a full deployment with `vercel dev` or a Vercel preview deployment.
 
-- Recruiter Hub: `https://your-domain/recruiterhub.html`
-- Info Hub: `https://your-domain/infohub.html`
+## Data and migration
 
-The Info Hub has links back to the home page and Recruiter Hub. Its **Download Excel** action exports a workbook with summary, company, and recruiter-audit sheets.
+- Company records, recruiter RE-audits, and candidate skills are stored in `.recruiterhub/data.json`.
+- Uploaded attachments are stored under `attachments/` in the configured GitHub repository.
+- Existing company records cached in the current browser are copied into GitHub the first time an authorized user opens the Info Hub. Keep that browser profile available until migration completes.
+- Attachments saved in the app's local browser storage are uploaded during migration. Old Firebase download URLs stay as legacy links; re-upload those files if you want them stored in GitHub instead.
+- Because GitHub records every update as a commit, avoid large files or frequent bulk changes. The current app intentionally limits each attachment to 700 KB and the data file to 900 KB.
 
-## Firebase setup
+The Info Hub's **Download Excel** action exports summary, company, and recruiter-audit sheets. Excel generation runs only when requested.
 
-1. Create a Firebase project, register a Web app, enable Cloud Firestore, and create a Firebase Storage bucket.
-2. Copy the Web app configuration into `.env.local`, matching the variable names in `.env.example`. These Firebase web settings are visible in the browser; never put service-account keys in the frontend or a `VITE_` variable.
-3. Deploy the included Firestore and Storage rules. Install/use the Firebase CLI, select the project, and deploy the rules:
+## Deploy
 
-   ```powershell
-   npx firebase-tools login
-   npx firebase-tools use --add
-   npx firebase-tools deploy --only firestore:rules,storage
-   ```
-
-4. Build and deploy `dist/`. Configure the same `VITE_FIREBASE_*` variables in the hosting provider before building.
-
-Firestore listeners update the Info Hub when company records change, including changes made from another device. Candidate skills and uploaded attachments are shared through Firestore and Firebase Storage too. On first load, existing company records in this browser are imported to Firestore; locally stored attachments are uploaded during that migration. Keep the browser profile containing your old data available until the import has completed.
-
-## Firestore data schema
-
-Firestore is schemaless; [`firestore.rules`](firestore.rules) validates writes against these document shapes:
-
-### `company_records/{recordId}`
-
-`recordId` must equal the document's `id`.
-
-```json
-{
-  "id": "record-uuid",
-  "company": "Example Company",
-  "site": "https://example.com",
-  "offer": "Company products and services",
-  "job": "Role or career notes",
-  "notes": "Research notes or generated pitch",
-  "status": "Researching",
-  "source": "info-hub",
-  "recruiterName": "",
-  "referralName": "",
-  "referralEmail": "",
-  "referralContext": "",
-  "attachmentPath": "",
-  "submittedAt": null,
-  "updatedAt": 1791345000000
-}
-```
-
-`source` is either `info-hub` or `recruiter-re-audit`. The recruiter fields, attachment path, and submission date are populated by RE-audit submissions; ordinary research records use empty strings and a null submission date.
-
-All fields shown in the example are required by the Firestore rules. Text limits are: `id` 128, `company` 120, `site` 2,000, `offer` and `job` 4,000 each, `notes` 10,000, `status` 40, `recruiterName` and `referralName` 120 each, `referralEmail` 254, `referralContext` 4,000, and `attachmentPath` 2,048 characters. `updatedAt` is a Unix timestamp in milliseconds; `submittedAt` is an ISO date string or `null`.
-
-### `hub_settings/candidate`
-
-```json
-{
-  "skills": "full-stack engineering, AI/LLM integration",
-  "updatedAt": 1791345000000
-}
-```
-
-Both fields are required; `skills` is limited to 500 characters and `updatedAt` is a Unix timestamp in milliseconds.
-
-Attachments are stored in Firebase Storage at `attachments/{unique-filename}`; the download URL is saved as `attachmentPath` on the related record.
-
-## Public access warning
-
-The supplied rules allow anyone with the app/project identifiers to read, add, edit, and delete company records and attachments without signing in. This meets the no-login shared-access requirement, but the data is public and can be changed by visitors. Do not store confidential or sensitive information. Enable Firebase App Check and monitoring before broad public use.
-
-## Production deployment
-
-```powershell
-npm ci
-npm run build
-```
-
-Deploy the generated `dist/` directory to Firebase Hosting or another static host. Firebase web config variables must be present at build time.
-
-The spoken submission thank-you uses the browser Speech Synthesis API when available and leaves an on-screen confirmation as fallback. Voice selection and playback depend on the user's browser/device settings.
+Connect the repository to Vercel, add the production environment variables, configure the GitHub OAuth callback to `https://<your-production-domain>/api/auth/callback`, and deploy. After changing any environment variable, redeploy so the serverless functions receive it.

@@ -7,19 +7,18 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "npx --yes vercel@62.7.0 dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "npx --yes vercel@62.7.0 dev --listen 4173",
+    "test": "node --test"
   },
   "dependencies": {
-    "exceljs": "^4.4.0",
-    "firebase": "^12.19.0"
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "vite": "^6.3.5"
   },
   "overrides": {
-    "@grpc/grpc-js": "^1.14.5",
     "uuid": "^11.1.1"
   }
 }
