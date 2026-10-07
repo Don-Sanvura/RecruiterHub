@@ -28,6 +28,6 @@ The included GitHub Actions workflow builds and publishes the static site whenev
 
 1. In the repository, open **Settings → Pages** and select **GitHub Actions** as the build and deployment source.
 2. Push to `main` and wait for the **Deploy static site to GitHub Pages** workflow to finish.
-3. The site will be available at `https://<owner>.github.io/recruiterhub.github.io/`.
+3. The site will be available at [https://don-sanvura.github.io/recruiterhub.github.io/](https://don-sanvura.github.io/recruiterhub.github.io/).
 
-The repository uses project Pages, so the build sets the Vite base path to `/recruiterhub.github.io/`.
+The workflow derives the Vite base path from the repository name, so project-page assets and navigation work under the repository subpath. If deployment returns a 404, confirm Pages is enabled for this repository, the source is set to **GitHub Actions**, and the deployment workflow completed. On GitHub Free, the repository must be public for Pages.
