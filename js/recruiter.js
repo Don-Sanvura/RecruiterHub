@@ -1,4 +1,4 @@
-import { getSkills, saveNote, saveSkills } from './storage.js';
+import { getLastStorageError, getSkills, saveNote, saveSkills } from './storage.js';
 import { deleteSharedFile, uploadSharedFile } from './files.js';
 const $=selector=>document.querySelector(selector);
 const esc=value=>String(value??'').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
@@ -40,14 +40,14 @@ export function renderRecruiter(){
       </section>
       <fieldset class="referral-fields mission-block mission-ally">
         <legend>03 &nbsp; Referral intelligence <span class="muted">(optional)</span></legend>
-        <p class="recruiter-intro">RE-audits and attachments are shared with anyone who can access the Info Hub. Do not submit confidential or sensitive information.</p>
+        <p class="recruiter-intro">RE-audits and attachments are shared with authorized workspace users. Do not submit confidential or sensitive information.</p>
         <div class="referral-grid">
           <label for="referral-name">Employee name<input id="referral-name" maxlength="120" autocomplete="name" placeholder="Who referred you?"></label>
           <label for="referral-email">Work email<input id="referral-email" type="email" maxlength="254" autocomplete="email" placeholder="name@company.com"></label>
         </div>
         <label for="referral-context">Team or introduction context</label>
         <textarea id="referral-context" maxlength="4000" rows="3" placeholder="Role, team, or how they know you"></textarea>
-        <label for="audit-attachment">Supporting file <span class="muted">(optional, PDF/DOC/DOCX/TXT, up to 10 MB)</span></label>
+        <label for="audit-attachment">Supporting file <span class="muted">(optional, PDF/DOC/DOCX/TXT, up to 700 KB)</span></label>
         <input id="audit-attachment" type="file" accept=".pdf,.doc,.docx,.txt,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
       </fieldset>
       <section class="mission-block mission-transmit">
@@ -88,7 +88,7 @@ export async function generateCard(){
   if(!recruiterName){status('Enter your name to launch your pitch card.');$('#recruiter-name').focus();return;}
   speakLaunchThanks(recruiterName);
   skills=$('#skills').value.trim()||skills;
-  if(!await saveSkills(skills)){status('Could not sync candidate skills. Check your Firebase connection and try again.');return;}
+  if(!await saveSkills(skills)){status(getLastStorageError()||'Could not sync candidate skills. Check the GitHub connection and try again.');return;}
   const button=$('#generate-card'),mission=$('#mission-status');button.disabled=true;button.textContent='Mapping signals...';mission.dataset.state='transmitting';$('#mission-status-text').textContent='Tuning your response to the signal map';deck.innerHTML='<p class="card-status">Mapping culture signals and tuning your response...</p>';
   try{const result=await createCard(keywords);generatedCard={keywords,result,mode,number:Math.floor(Math.random()*900+100)};renderCard();mission.dataset.state='complete';$('#mission-status-text').textContent='Transmission complete. Your pitch is ready.';}finally{button.disabled=false;button.textContent='Launch pitch card';}
 }
@@ -125,6 +125,6 @@ export async function saveCardToHub(){
   const file=$('#audit-attachment').files[0];let attachmentPath='';
   if(file){status(`Uploading ${file.name}...`);try{attachmentPath=await uploadSharedFile(file);}catch(error){status(error.message||'The attachment could not be uploaded.');return;}}
   const saved=await saveNote({id:crypto.randomUUID(),company,site:'',offer:'Met at career fair showcase',job:`Generated pitch card: ${result.title}`,notes:`Keywords used: ${keywords.join(', ')}\n\n${result.pitch}`,status:'Interview',source:'recruiter-re-audit',submittedAt:new Date().toISOString(),recruiterName,referralName,referralEmail,referralContext,attachmentPath});
-  if(!saved){if(attachmentPath){try{await deleteSharedFile(attachmentPath);}catch{}}status('Could not save this RE-audit. Check your Firebase connection and try again.');return;}
+  if(!saved){let cleanupError='';if(attachmentPath){try{await deleteSharedFile(attachmentPath);}catch(error){cleanupError=` The uploaded attachment could not be removed: ${error.message}`;}}status(`${getLastStorageError()||'Could not save this RE-audit.'}${cleanupError}`);return;}
   status(`RE-audit saved for ${company}. It is now available in the Info Hub.`);
 }

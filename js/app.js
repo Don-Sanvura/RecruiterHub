@@ -2,15 +2,17 @@ import { clearHubLinks, deleteHubNode, drawHubLinks, openNodeDialog, renderHub, 
 import { applyPreset, copyPitch, copyShareLink, generateCard, renderRecruiter, saveCardToHub, setMode, shareCard, updateMissionStatus } from './recruiter.js';
 import { getSharedFileUrl } from './files.js';
 import { downloadExcel } from './export.js';
-import { firebaseConfigured } from './firebase-client.js';
 import { mountNeuralNetwork } from './neural-network.js';
-import { getNotes, loadNotes, loadSkills, subscribeToRecordChanges, subscribeToSkillChanges } from './storage.js';
+import { getLastStorageError, getNotes, loadNotes, loadSkills, subscribeToRecordChanges, subscribeToSkillChanges } from './storage.js';
+import { apiRequest, requestBody } from './api.js';
 
 const app = document.querySelector('#app');
 let disposeNeuralNetwork;
 let unsubscribeRecords;
 let unsubscribeSkills;
 let routeVersion = 0;
+let authUser = null;
+let authConfigured = false;
 
 const routeTable = {
 	'/': { title: '' },
@@ -38,11 +40,36 @@ function navigation(title = '') {
 	const otherPage = title === 'Info Hub'
 		? '<a class="button button-quiet" href="/">Home</a><a class="button button-quiet" href="/recruiterhub.html">Recruiter Hub</a>'
 		: '';
-	return `<header class="topbar"><div class="topbar-right">${title ? `<p class="topbar-title">${title}</p>` : ''}${otherPage}</div></header>`;
+	const account = authUser
+		? `<span class="topbar-title">Signed in as ${escapeHtml(authUser)}</span><button class="button button-quiet" data-action="sign-out">Sign out</button>`
+		: authConfigured ? '<a class="button button-quiet" href="/api/auth/login">Sign in with GitHub</a>' : '';
+	return `<header class="topbar"><div class="topbar-right">${title ? `<p class="topbar-title">${title}</p>` : ''}${otherPage}${account}</div></header>`;
 }
 
-function firebaseSetup(title) {
-	return `${navigation(title)}<section class="surface auth-panel"><p class="eyebrow">Firebase setup</p><h1>Connect shared data</h1><p class="auth-copy">Add your Firebase web app values to <code>.env.local</code> using the names in <code>.env.example</code>. Enable Firestore Database and Firebase Storage, then deploy <code>firestore.rules</code> and <code>storage.rules</code>. Rebuild and redeploy to make data available across devices in real time.</p></section>`;
+function githubSetup(title, issues = []) {
+	const issueList = issues.length
+		? `<p class="auth-copy">Missing or invalid server settings: <code>${issues.map(escapeHtml).join('</code>, <code>')}</code>.</p>`
+		: '';
+	return `${navigation(title)}<section class="surface auth-panel"><p class="eyebrow">GitHub storage setup</p><h1>Connect shared data</h1><p class="auth-copy">Configure the GitHub OAuth and repository variables in Vercel, including the OAuth callback URL <code>/api/auth/callback</code>, then redeploy. See README.md for the complete setup steps.</p>${issueList}</section>`;
+}
+
+function signInPanel(title, message = '') {
+	const notice = message ? `<p class="auth-copy" role="alert">${message}</p>` : '';
+	return `${navigation(title)}<section class="surface auth-panel"><p class="eyebrow">Private shared workspace</p><h1>Sign in to connect shared data</h1><p class="auth-copy">Company research, candidate skills, and attachments are stored in the configured GitHub repository. Only authorized GitHub accounts can access or change them.</p>${notice}<a class="button button-primary" href="/api/auth/login">Continue with GitHub</a></section>`;
+}
+
+function connectionError(title, error) {
+	return `${navigation(title)}<section class="surface auth-panel"><p class="eyebrow">GitHub connection</p><h1>Shared data could not load.</h1><p class="auth-copy">${escapeHtml(error.message || 'Check the Vercel API configuration and GitHub repository access, then try again.')}</p><a class="button button-primary" href="">Try again</a></section>`;
+}
+
+function escapeHtml(value) {
+	return String(value).replace(/[&<>"']/g, character => ({
+		'&': '&amp;',
+		'<': '&lt;',
+		'>': '&gt;',
+		'"': '&quot;',
+		"'": '&#39;'
+	}[character]));
 }
 
 function landing() {
@@ -97,12 +124,31 @@ async function renderRoute() {
 		app.innerHTML = notFound();
 		return;
 	}
-	if (path === '/') {
-		app.innerHTML = navigation() + landing();
+	let session;
+	try {
+		session = await apiRequest('/api/auth/session');
+	} catch (error) {
+		if (version === routeVersion) app.innerHTML = connectionError(route.title, error);
 		return;
 	}
-	if (!firebaseConfigured) {
-		app.innerHTML = firebaseSetup(route.title);
+	if (version !== routeVersion) return;
+	authConfigured = session.configured;
+	authUser = session.authenticated ? session.login : null;
+	if (path === '/') {
+		app.innerHTML = navigation() + (session.configured ? landing() : githubSetup('', session.configurationIssues)) +
+			(location.search.includes('auth=unauthorized')
+				? '<p class="hub-notice" role="alert">This GitHub account is not authorized for this workspace.</p>'
+				: location.search.includes('auth=denied')
+					? '<p class="hub-notice" role="alert">GitHub sign-in was cancelled.</p>'
+					: '');
+		return;
+	}
+	if (!session.configured) {
+		app.innerHTML = githubSetup(route.title, session.configurationIssues);
+		return;
+	}
+	if (!session.authenticated) {
+		app.innerHTML = signInPanel(route.title);
 		return;
 	}
 
@@ -110,8 +156,7 @@ async function renderRoute() {
 		try {
 			await loadNotes();
 		} catch (error) {
-			app.innerHTML = `${navigation(route.title)}<section class="surface auth-panel"><p class="eyebrow">Cloud data</p><h1>Info Hub could not load.</h1><p class="auth-copy"></p></section>`;
-			app.querySelector('.auth-copy').textContent = error.message || 'Could not load shared Firebase data. Check your Firebase configuration and Firestore rules.';
+			if (version === routeVersion) app.innerHTML = connectionError(route.title, error);
 			return;
 		}
 		if (version !== routeVersion) return;
@@ -153,7 +198,17 @@ app.addEventListener('click', async event => {
 	const { action } = button.dataset;
 	if (action === 'add-node') openNodeDialog();
 	if (action === 'edit-node') openNodeDialog(button.dataset.id);
-	if (action === 'delete-node' && await deleteHubNode(button.dataset.id)) await renderRoute();
+	if (action === 'delete-node') {
+		if (await deleteHubNode(button.dataset.id)) {
+			await renderRoute();
+		} else if (getLastStorageError()) {
+			const alert = document.createElement('p');
+			alert.className = 'hub-notice';
+			alert.setAttribute('role', 'alert');
+			alert.textContent = getLastStorageError();
+			app.prepend(alert);
+		}
+	}
 	if (action === 'view-audit') toggleAuditView();
 	if (action === 'view-audit-file') {
 		const feedback = document.querySelector('#audit-feedback');
@@ -166,9 +221,22 @@ app.addEventListener('click', async event => {
 		try {
 			const fileUrl = await getSharedFileUrl(button.dataset.path);
 			downloadTab.location.replace(fileUrl);
-		} catch {
+		} catch (error) {
 			downloadTab.close();
-			if (feedback) feedback.textContent = 'The attachment could not be opened from this browser. It may have been removed.';
+			if (feedback) feedback.textContent = error.message || 'The attachment could not be opened from this browser. It may have been removed.';
+		}
+	}
+	if (action === 'sign-out') {
+		try {
+			await apiRequest('/api/auth/logout', { method: 'POST', body: requestBody({}) });
+			authUser = null;
+			await renderRoute();
+		} catch (error) {
+			const alert = document.createElement('p');
+			alert.className = 'hub-notice';
+			alert.setAttribute('role', 'alert');
+			alert.textContent = `Could not sign out: ${error.message}`;
+			app.prepend(alert);
 		}
 	}
 	if (action === 'export-excel') {

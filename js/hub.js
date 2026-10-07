@@ -1,4 +1,4 @@
-import { getNotes, removeNote, saveNote } from './storage.js';
+import { getLastStorageError, getNotes, removeNote, saveNote } from './storage.js';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[character]));
 let resizeObserver;
@@ -78,7 +78,7 @@ export async function saveDialogNode() {
   if(!company){$('#f-company').focus();return false;}
   const id=dialog.dataset.editId||`n${Date.now()}`,existing=getNotes().find(item=>item.id===id)||{},node={...existing,id,company};
   for(const field of ['site','offer','job','notes','status'])node[field]=$(`#f-${field}`).value.trim();
-  if(!await saveNote(node)){feedback.textContent='Could not save this company. Check the connection and try again.';return false;}
+  if(!await saveNote(node)){feedback.textContent=getLastStorageError()||'Could not save this company. Check the GitHub connection and try again.';return false;}
   const messages=dialog.dataset.editId?[
     `Thanks for keeping ${company} up to date.`,
     `${company}'s details are refreshed. Your network appreciates the care.`,
