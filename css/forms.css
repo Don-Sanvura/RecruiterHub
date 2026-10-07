@@ -1,0 +1,517 @@
+label {
+  color: #46584f;
+  font-size: .82rem;
+  line-height: 1.4;
+}
+
+input,
+textarea,
+select {
+  min-height: 45px;
+  border-color: #c8d5ce;
+  background: rgba(255, 255, 255, .94);
+  color: #172d27;
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #75847d;
+  opacity: 1;
+}
+
+input:hover,
+textarea:hover,
+select:hover {
+  border-color: #92a89c;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  border-color: #147b65;
+  outline: 3px solid rgba(20, 123, 101, .2);
+  outline-offset: 1px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px rgba(20, 123, 101, .18);
+}
+
+input:user-invalid,
+textarea:user-invalid,
+select:user-invalid,
+input[type="email"]:not(:placeholder-shown):invalid {
+  border-color: #bd5147;
+  box-shadow: 0 0 0 2px rgba(189, 81, 71, .12);
+}
+
+dialog {
+  border-color: rgba(255, 255, 255, .8);
+  background: rgba(247, 250, 247, .95);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+dialog::backdrop {
+  background: rgba(12, 28, 23, .4);
+  backdrop-filter: blur(6px);
+}
+
+.dialog-form {
+  padding: clamp(18px, 4vw, 28px);
+}
+
+.dialog-heading {
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(31, 74, 58, .12);
+}
+
+.dialog-form label {
+  margin: 14px 0 6px;
+  color: #46584f;
+}
+
+.dialog-actions {
+  padding-top: 16px;
+  border-top: 1px solid rgba(31, 74, 58, .12);
+}
+
+.form-feedback:empty {
+  display: none;
+}
+
+.form-feedback {
+  margin: 14px 0 0;
+  color: #a0332d;
+  font-size: .84rem;
+}
+
+.auth-panel {
+  width: min(520px, 100%);
+  margin: 5vh auto 0;
+  padding: clamp(22px, 5vw, 34px);
+  color: #172d27;
+}
+
+.auth-panel h1 {
+  margin-bottom: 10px;
+  font-size: clamp(1.8rem, 5vw, 2.35rem);
+}
+
+.auth-copy {
+  color: #56675f;
+  font-size: .94rem;
+  line-height: 1.6;
+}
+
+.auth-panel form {
+  margin-top: 22px;
+}
+
+.auth-panel form button[type="submit"] {
+  width: 100%;
+  margin-top: 18px;
+}
+
+.demo-banner {
+  max-width: 620px;
+  margin: 38px auto 0;
+  padding: 12px 16px;
+  border: 1px solid rgba(169, 115, 32, .24);
+  border-radius: 8px;
+  background: rgba(250, 235, 202, .72);
+  color: #563d16;
+  font-size: .84rem;
+  text-align: center;
+}
+
+.recruiter-active .recruiter-panel {
+  background: rgba(250, 252, 255, .88);
+  backdrop-filter: blur(13px) saturate(1.08);
+}
+
+.recruiter-panel .keyword-grid {
+  align-items: start;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.recruiter-panel .keyword-grid label {
+  margin: 0;
+  color: #46584f;
+}
+
+.recruiter-panel .keyword-grid input {
+  margin-top: 6px;
+}
+
+.referral-fields {
+  background: rgba(235, 244, 239, .5);
+}
+
+.referral-fields label {
+  color: #46584f;
+}
+
+.referral-fields input,
+.referral-fields textarea {
+  margin-top: 6px;
+}
+
+.skills-details summary {
+  color: #46584f;
+  font-weight: 600;
+}
+
+.preset-button[aria-pressed="true"] {
+  border-color: #147b65;
+  background: #0d5849;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(13, 88, 73, .18);
+}
+
+.card-art {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.card-art::before {
+  position: absolute;
+  inset: 12% 20%;
+  border: 1px solid rgba(164, 243, 233, .22);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(84, 232, 219, .24), rgba(55, 142, 179, .08) 48%, transparent 72%);
+  content: "";
+  animation: signal-breathe 3s ease-in-out infinite alternate;
+}
+
+.card-orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(58%, 150px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(171, 240, 238, .62);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotateX(64deg) rotateZ(-24deg);
+}
+
+.card-orbit-outer {
+  width: min(74%, 190px);
+  border-color: rgba(196, 244, 129, .54);
+  animation: signal-orbit 11s linear infinite;
+}
+
+.card-orbit-inner {
+  width: min(46%, 118px);
+  transform: translate(-50%, -50%) rotateX(64deg) rotateZ(34deg);
+}
+
+.card-signal {
+  position: absolute;
+  z-index: 1;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c5e66a;
+  box-shadow: 0 0 12px 3px rgba(197, 230, 106, .55);
+  animation: signal-pulse 1.8s ease-in-out infinite alternate;
+}
+
+.card-signal-one { top: 29%; left: 34%; }
+.card-signal-two { top: 61%; left: 67%; animation-delay: -.7s; }
+.card-signal-three { top: 68%; left: 39%; animation-delay: -1.2s; }
+
+.card-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, .9);
+  border-radius: 50%;
+  background: #58d8d1;
+  box-shadow: 0 0 20px 7px rgba(88, 216, 209, .5);
+  transform: translate(-50%, -50%);
+}
+
+.card-art-label {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  color: rgba(239, 255, 249, .76);
+  font-size: .58rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+}
+
+.expedition-heading {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 18px 24px;
+  margin-bottom: 26px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(31, 74, 58, .13);
+  animation: heading-arrive .62s cubic-bezier(.2, .75, .25, 1) both;
+}
+
+.expedition-title h1 {
+  max-width: 590px;
+}
+
+.mission-status {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  min-width: min(100%, 255px);
+  padding: 10px 12px;
+  border: 1px solid #d5e2da;
+  border-radius: 8px;
+  background: rgba(235, 244, 239, .72);
+  color: #46584f;
+  font-size: .75rem;
+  transition: border-color .25s ease, background-color .25s ease;
+}
+
+.mission-status strong {
+  color: #172d27;
+  font-variant-numeric: tabular-nums;
+}
+
+.mission-beacon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a69c;
+  box-shadow: 0 0 0 3px rgba(148, 166, 156, .14);
+  transition: background-color .25s ease, box-shadow .25s ease;
+}
+
+.mission-status[data-state="scanning"] .mission-beacon,
+.mission-status[data-state="transmitting"] .mission-beacon {
+  background: #14a7b5;
+  box-shadow: 0 0 0 4px rgba(20, 167, 181, .14), 0 0 14px rgba(20, 167, 181, .48);
+  animation: beacon-ping 1.2s ease-in-out infinite;
+}
+
+.mission-status[data-state="ready"] .mission-beacon,
+.mission-status[data-state="complete"] .mission-beacon {
+  background: #5a9f36;
+  box-shadow: 0 0 0 4px rgba(90, 159, 54, .14), 0 0 12px rgba(90, 159, 54, .35);
+}
+
+.mission-progress {
+  grid-column: 1 / -1;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e3ebe6;
+}
+
+.mission-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #147b65, #26aabd, #9cbe55);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .35s cubic-bezier(.2, .75, .25, 1);
+}
+
+.mission-block {
+  position: relative;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-left: 2px solid rgba(20, 123, 101, .28);
+  border-radius: 0 8px 8px 0;
+  background: linear-gradient(90deg, rgba(229, 242, 234, .52), rgba(255, 255, 255, .16) 70%);
+}
+
+.mission-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 10px;
+  color: #42594f;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.mission-step span {
+  display: inline-grid;
+  min-width: 28px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid rgba(20, 123, 101, .22);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .64);
+  color: #147b65;
+  font-size: .66rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mission-target { animation: target-lock .52s .06s both; }
+.mission-signals { animation: signal-decode .58s .13s both; }
+.mission-routes { animation: route-deploy .56s .2s both; }
+.mission-ally { animation: ally-scan .6s .27s both; }
+.mission-transmit { animation: transmit-arm .62s .34s both; }
+.mission-skills { animation: loadout-unfold .56s .41s both; }
+
+.mission-target:focus-within {
+  border-color: rgba(20, 123, 101, .7);
+  background: linear-gradient(90deg, rgba(209, 239, 224, .78), rgba(255, 255, 255, .28) 78%);
+}
+
+.mission-signals .keyword-grid {
+  margin: 0;
+}
+
+.mission-signals .keyword-grid label {
+  transition: transform .2s ease;
+}
+
+.mission-signals .keyword-grid label:focus-within {
+  transform: translateY(-3px);
+}
+
+.mission-routes .mission-step {
+  margin-bottom: 8px;
+}
+
+.mission-routes .preset-button {
+  transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+.mission-routes .preset-button:hover {
+  transform: translateY(-3px) scale(1.035);
+  box-shadow: 0 7px 16px rgba(20, 72, 59, .14);
+}
+
+.mission-ally {
+  overflow: hidden;
+}
+
+.mission-ally::after {
+  position: absolute;
+  inset: 0 auto 0 -35%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent, rgba(67, 189, 187, .11), transparent);
+  content: "";
+  pointer-events: none;
+  transform: skewX(-18deg);
+  transition: left .65s ease;
+}
+
+.mission-ally:focus-within::after {
+  left: 120%;
+}
+
+.mission-transmit .recruiter-controls {
+  justify-content: space-between;
+}
+
+.mission-transmit .button-primary:not(:disabled) {
+  box-shadow: 0 5px 16px rgba(20, 123, 101, .2);
+}
+
+.mission-transmit .button-primary:active {
+  transform: scale(.97);
+}
+
+.mission-skills summary {
+  transition: color .2s ease;
+}
+
+.mission-skills[open] summary {
+  color: #147b65;
+}
+
+.mission-skills label {
+  display: block;
+  margin-top: 12px;
+}
+
+.mission-skills input {
+  margin-top: 6px;
+}
+
+@keyframes heading-arrive {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes target-lock {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes signal-decode {
+  from { opacity: 0; transform: translateY(10px); clip-path: inset(15% 0 15% 0); }
+  to { opacity: 1; transform: translateY(0); clip-path: inset(0); }
+}
+
+@keyframes route-deploy {
+  from { opacity: 0; transform: translateX(14px) scale(.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes ally-scan {
+  from { opacity: 0; clip-path: inset(0 100% 0 0); }
+  to { opacity: 1; clip-path: inset(0); }
+}
+
+@keyframes transmit-arm {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes loadout-unfold {
+  from { opacity: 0; transform: perspective(450px) rotateX(-9deg); }
+  to { opacity: 1; transform: perspective(450px) rotateX(0); }
+}
+
+@keyframes beacon-ping {
+  50% { box-shadow: 0 0 0 7px rgba(20, 167, 181, .08), 0 0 18px rgba(20, 167, 181, .6); }
+}
+
+@keyframes signal-breathe {
+  from { opacity: .45; transform: scale(.93); }
+  to { opacity: .95; transform: scale(1.04); }
+}
+
+@keyframes signal-orbit {
+  from { rotate: 0deg; }
+  to { rotate: 360deg; }
+}
+
+@keyframes signal-pulse {
+  from { opacity: .5; scale: .8; }
+  to { opacity: 1; scale: 1.45; }
+}
+
+@media (max-width: 640px) {
+  .expedition-heading {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .mission-status {
+    min-width: 0;
+  }
+
+  .mission-block {
+    padding: 12px;
+  }
+
+  .recruiter-panel .keyword-grid {
+    gap: 8px;
+  }
+
+  .dialog-actions {
+    flex-wrap: wrap;
+  }
+}
