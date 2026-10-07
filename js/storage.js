@@ -1,199 +1,127 @@
-import { apiRequest, requestBody } from './api.js';
-import { deleteSharedFile, uploadLegacyAttachment } from './files.js';
-
 const NOTES_KEY = 'hub.notes';
 const SKILLS_KEY = 'hub.skills';
 const DEFAULT_SKILLS = 'full-stack engineering, AI/LLM integration, shipping fast';
-const SYNC_INTERVAL = 30_000;
 
-function readLocalNotes() {
+function readJson(key, fallback) {
 	try {
-		const saved = JSON.parse(localStorage.getItem(NOTES_KEY) || '[]');
-		return Array.isArray(saved) ? saved : [];
+		const value = JSON.parse(localStorage.getItem(key) || 'null');
+		return value ?? fallback;
 	} catch {
-		return [];
+		return fallback;
 	}
 }
 
-function writeLocalNotes(saved) {
-	try {
-		localStorage.setItem(NOTES_KEY, JSON.stringify(saved));
-	} catch {
-		console.warn('Could not cache shared company records in this browser.');
-	}
-}
-
-function writeLocalSkills(value) {
-	try {
-		localStorage.setItem(SKILLS_KEY, value);
-	} catch {
-		console.warn('Could not cache candidate skills in this browser.');
-	}
-}
-
-let notes = readLocalNotes();
+let notes = readJson(NOTES_KEY, []);
+if (!Array.isArray(notes)) notes = [];
 let skills = DEFAULT_SKILLS;
-let migrationPromise;
+try {
+	skills = localStorage.getItem(SKILLS_KEY) || DEFAULT_SKILLS;
+} catch {
+	// Storage errors are surfaced when a save is attempted.
+}
 let lastStorageError = '';
 
 export function getNotes() { return notes; }
 export function getLastStorageError() { return lastStorageError; }
+export function getSkills() { return skills; }
 
-function normalizeNote(note) {
-	return {
-		id: String(note.id),
-		company: String(note.company || ''),
-		site: note.site || '',
-		offer: note.offer || '',
-		job: note.job || '',
-		notes: note.notes || '',
-		status: note.status || 'Researching',
-		source: note.source === 'recruiter-re-audit' ? note.source : 'info-hub',
-		recruiterName: note.recruiterName || '',
-		referralName: note.referralName || '',
-		referralEmail: note.referralEmail || '',
-		referralContext: note.referralContext || '',
-		attachmentPath: note.attachmentPath || '',
-		submittedAt: note.submittedAt || null,
-		updatedAt: Date.now()
-	};
-}
-
-function applyServerData(data) {
-	notes = data.notes;
-	skills = data.skills || DEFAULT_SKILLS;
-	writeLocalNotes(notes);
-	writeLocalSkills(skills);
-}
-
-async function migrateLocalNotes(remoteNotes, cachedNotes) {
-	if (migrationPromise) return migrationPromise;
-	const remoteIds = new Set(remoteNotes.map(note => String(note.id)));
-	const localNotes = cachedNotes.filter(note => !remoteIds.has(String(note.id)));
-	if (!localNotes.length) return remoteNotes;
-
-	migrationPromise = (async () => {
-		for (const localNote of localNotes) {
-			const note = normalizeNote(localNote);
-			let uploadedAttachment = '';
-			if (note.attachmentPath && !/^https?:\/\//i.test(note.attachmentPath) && !note.attachmentPath.startsWith('github:')) {
-				note.attachmentPath = await uploadLegacyAttachment(note.attachmentPath, note.id);
-				uploadedAttachment = note.attachmentPath;
-			}
-			if (!await saveNote(note)) {
-				if (uploadedAttachment) {
-					try {
-						await deleteSharedFile(uploadedAttachment);
-					} catch (error) {
-						console.error('Could not remove an attachment after its record migration failed.', error);
-					}
-				}
-				throw new Error(lastStorageError || `Could not migrate the saved record for ${note.company}.`);
-			}
-		}
-		return notes;
-	})();
+function persist() {
+	let previousNotes;
+	let previousSkills;
 	try {
-		return await migrationPromise;
-	} finally {
-		migrationPromise = undefined;
+		previousNotes = localStorage.getItem(NOTES_KEY);
+		previousSkills = localStorage.getItem(SKILLS_KEY);
+		localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+		localStorage.setItem(SKILLS_KEY, skills);
+		lastStorageError = '';
+		return true;
+	} catch (error) {
+		try {
+			if (previousNotes === null) localStorage.removeItem(NOTES_KEY);
+			else if (previousNotes !== undefined) localStorage.setItem(NOTES_KEY, previousNotes);
+			if (previousSkills === null) localStorage.removeItem(SKILLS_KEY);
+			else if (previousSkills !== undefined) localStorage.setItem(SKILLS_KEY, previousSkills);
+		} catch (restoreError) {
+			console.error('Could not restore browser data after a failed save.', restoreError);
+		}
+		lastStorageError = `Could not save data in this browser: ${error.message}`;
+		console.error(lastStorageError, error);
+		return false;
 	}
 }
 
 export async function loadNotes() {
-	const cachedNotes = readLocalNotes();
-	const data = await apiRequest('/api/data');
-	applyServerData(data);
-	await migrateLocalNotes(data.notes, cachedNotes);
 	return notes;
 }
 
 export async function saveNote(note) {
-	try {
-		const data = await apiRequest('/api/data', {
-			method: 'POST',
-			body: requestBody({ action: 'saveNote', note: normalizeNote(note) })
-		});
-		applyServerData(data);
-		lastStorageError = '';
-		return true;
-	} catch (error) {
-		lastStorageError = error.message;
-		console.error('Could not save the record to the GitHub repository.', error);
-		return false;
-	}
+	const updatedNote = {
+		...note,
+		id: String(note.id),
+		company: String(note.company || '').trim(),
+		updatedAt: Date.now()
+	};
+	const index = notes.findIndex(item => String(item.id) === updatedNote.id);
+	const previousNotes = notes;
+	notes = index < 0
+		? [...notes, updatedNote]
+		: notes.map((item, itemIndex) => itemIndex === index ? updatedNote : item);
+	if (persist()) return true;
+	notes = previousNotes;
+	return false;
 }
 
 export async function removeNote(id) {
-	try {
-		const data = await apiRequest(`/api/data?id=${encodeURIComponent(String(id))}`, { method: 'DELETE' });
-		applyServerData(data);
-		lastStorageError = '';
-		return true;
-	} catch (error) {
-		lastStorageError = error.message;
-		console.error('Could not delete the record from the GitHub repository.', error);
-		return false;
-	}
+	const previousNotes = notes;
+	notes = notes.filter(note => String(note.id) !== String(id));
+	if (persist()) return true;
+	notes = previousNotes;
+	return false;
 }
 
-function subscribeToData(callback, onError) {
-	let stopped = false;
-	let inFlight = false;
-	let previousNotes = JSON.stringify(notes);
-	let previousSkills = skills;
-	const sync = async () => {
-		if (stopped || inFlight) return;
-		inFlight = true;
+function notifySubscribers() {
+	const data = { notes, skills };
+	for (const callback of recordSubscribers) callback(data);
+	for (const callback of skillSubscribers) callback(skills);
+}
+
+const recordSubscribers = new Set();
+const skillSubscribers = new Set();
+
+window.addEventListener('storage', event => {
+	if (event.key === NOTES_KEY || event.key === SKILLS_KEY) {
+		notes = readJson(NOTES_KEY, []);
+		if (!Array.isArray(notes)) notes = [];
 		try {
-			const data = await apiRequest('/api/data');
-			if (stopped) return;
-			applyServerData(data);
-			const changed = previousNotes !== JSON.stringify(notes) || previousSkills !== skills;
-			previousNotes = JSON.stringify(notes);
-			previousSkills = skills;
-			if (changed) callback(data);
-		} catch (error) {
-			if (!stopped) onError(error);
-		} finally {
-			inFlight = false;
+			skills = localStorage.getItem(SKILLS_KEY) || DEFAULT_SKILLS;
+		} catch {
+			skills = DEFAULT_SKILLS;
 		}
-	};
-	const timer = setInterval(() => { void sync(); }, SYNC_INTERVAL);
-	return () => {
-		stopped = true;
-		clearInterval(timer);
-	};
-}
+		notifySubscribers();
+	}
+});
 
-export function subscribeToRecordChanges(callback, onError = () => {}) {
-	return subscribeToData(callback, onError);
+export function subscribeToRecordChanges(callback) {
+	recordSubscribers.add(callback);
+	return () => recordSubscribers.delete(callback);
 }
-
-export function getSkills() { return skills; }
 
 export async function loadSkills() {
-	const data = await apiRequest('/api/data');
-	applyServerData(data);
 	return skills;
 }
 
 export async function saveSkills(value) {
-	try {
-		const data = await apiRequest('/api/data', {
-			method: 'POST',
-			body: requestBody({ action: 'saveSkills', skills: value })
-		});
-		applyServerData(data);
-		lastStorageError = '';
-		return true;
-	} catch (error) {
-		lastStorageError = error.message;
-		console.error('Could not save candidate skills to the GitHub repository.', error);
+	const previousSkills = skills;
+	skills = String(value);
+	if (!persist()) {
+		skills = previousSkills;
 		return false;
 	}
+	for (const callback of skillSubscribers) callback(skills);
+	return true;
 }
 
-export function subscribeToSkillChanges(callback, onError = () => {}) {
-	return subscribeToData(data => callback(data.skills), onError);
+export function subscribeToSkillChanges(callback) {
+	skillSubscribers.add(callback);
+	return () => skillSubscribers.delete(callback);
 }
