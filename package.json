@@ -7,9 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "npx --yes vercel@62.7.0 dev",
+    "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "npx --yes vercel@62.7.0 dev --listen 4173",
+    "preview": "vite preview --host 0.0.0.0",
     "test": "node --test"
   },
   "dependencies": {

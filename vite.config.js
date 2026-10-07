@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 
 export default defineConfig({
+  base: process.env.BASE_PATH || '/',
   server: { host: '0.0.0.0' },
   preview: { host: '0.0.0.0' },
   build: {
@@ -15,11 +16,7 @@ export default defineConfig({
       },
       output: {
         manualChunks(id) {
-          if (id.includes('/node_modules/@firebase/firestore/')) return 'firebase-firestore';
-          if (id.includes('/node_modules/@firebase/storage/')) return 'firebase-storage';
-          if (id.includes('/node_modules/@firebase/app/')) return 'firebase-app';
-          if (id.includes('/node_modules/@firebase/')) return 'firebase-core';
-          if (id.includes('/node_modules/firebase/')) return 'firebase-sdk';
+          if (id.includes('/node_modules/exceljs/')) return 'exceljs';
         }
       }
     }

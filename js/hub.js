@@ -16,7 +16,7 @@ function renderNode(node) {
 function renderAuditEntry(note) {
   const email=note.referralEmail?`<a href="mailto:${esc(note.referralEmail)}">${esc(note.referralEmail)}</a>`:'Not provided';
   const date=note.submittedAt?new Date(note.submittedAt).toLocaleDateString():'Date unavailable';
-  const attachment=note.attachmentPath?`<button class="button audit-file-button" data-action="view-audit-file" data-path="${esc(note.attachmentPath)}">Open shared attachment</button>`:'';
+  const attachment=note.attachmentPath?`<button class="button audit-file-button" data-action="view-audit-file" data-path="${esc(note.attachmentPath)}">Open attachment</button>`:'';
   return `<article class="audit-entry"><div class="audit-entry-heading"><div><p class="eyebrow">RE-audit · ${esc(date)}</p><h3>${esc(note.company)}</h3></div><span class="status-tag">${esc(note.status)}</span></div><dl><div><dt>Recruiter</dt><dd>${esc(note.recruiterName||'Not provided')}</dd></div><div><dt>Employee referral</dt><dd>${esc(note.referralName||'Not provided')}</dd></div><div><dt>Work email</dt><dd>${email}</dd></div><div><dt>Referral context</dt><dd>${esc(note.referralContext||'No context provided')}</dd></div><div><dt>Generated pitch</dt><dd>${esc(note.notes||note.job)}</dd></div>${attachment?`<div><dt>Supporting file</dt><dd>${attachment}</dd></div>`:''}</dl></article>`;
 }
 
@@ -78,7 +78,7 @@ export async function saveDialogNode() {
   if(!company){$('#f-company').focus();return false;}
   const id=dialog.dataset.editId||`n${Date.now()}`,existing=getNotes().find(item=>item.id===id)||{},node={...existing,id,company};
   for(const field of ['site','offer','job','notes','status'])node[field]=$(`#f-${field}`).value.trim();
-  if(!await saveNote(node)){feedback.textContent=getLastStorageError()||'Could not save this company. Check the GitHub connection and try again.';return false;}
+  if(!await saveNote(node)){feedback.textContent=getLastStorageError()||'Could not save this company in browser storage.';return false;}
   const messages=dialog.dataset.editId?[
     `Thanks for keeping ${company} up to date.`,
     `${company}'s details are refreshed. Your network appreciates the care.`,
