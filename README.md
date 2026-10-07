@@ -1,4 +1,4 @@
-# Neural Recruiter Hub
+# RecruiterHub
 
 A responsive recruiter experience and company Info Hub. Recruiters submit RE-audits without entering credentials; Info Hub users sign in to review and manage records. Supabase anonymous Auth sessions and Postgres provide durable storage and enforce access with row-level security.
 
