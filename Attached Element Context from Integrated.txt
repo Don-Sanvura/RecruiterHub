@@ -1,0 +1,96 @@
+Attached Element Context from Integrated Browser
+
+Element: button.icon-button
+
+URL: http://localhost:4173/#/hub
+
+HTML Path: dialog#node-dialog > form.dialog-form > div.dialog-heading > button.icon-button
+
+Outer HTML:
+```html
+<button class="icon-button" value="cancel" aria-label="Close dialog">×</button>
+```
+
+Dimensions:
+- top: 49px
+- left: 574px
+- width: 38px
+- height: 38px
+
+CSS:
+```css
+*, *::before, *::after { box-sizing:inherit }
+button, input, textarea, select { font:inherit;color:inherit }
+button { -webkit-tap-highlight-color:transparent }
+.icon-button { display:grid;width:38px;height:38px;place-items:center;border:1px solid var(--line);border-radius:50%;background:transparent;font-size:1.35rem;cursor:pointer }
+
+/* Inherited */
+dialog { color:var(--ink) }
+.hub-active { color: #f4f6fa }
+:root { font-family:var(--body); color:var(--ink) }
+
+/* Resolved values */
+margin: 0px /*UA*/;
+border-radius: 50%;
+border: 1px /*UA*/ solid /*UA*/ rgb(216, 225, 218) /*UA*/;
+-webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+align-items: center;
+appearance: auto /*UA*/;
+background-attachment: scroll;
+background-clip: border-box;
+background-color: rgba(0, 0, 0, 0);
+background-image: none;
+background-origin: padding-box;
+background-position-x: 0%;
+background-position-y: 0%;
+background-repeat: repeat;
+background-size: auto;
+border-image-outset: 0 /*UA*/;
+border-image-repeat: stretch /*UA*/;
+border-image-slice: 100% /*UA*/;
+border-image-source: none /*UA*/;
+border-image-width: 1 /*UA*/;
+box-sizing: border-box;
+color: rgb(23, 45, 39);
+cursor: pointer;
+display: grid;
+font-family: "DM Sans", "Segoe UI", sans-serif;
+font-feature-settings: normal;
+font-kerning: auto;
+font-language-override: normal;
+font-optical-sizing: auto;
+font-size: 21.6px;
+font-size-adjust: none;
+font-stretch: 100%;
+font-style: normal;
+font-variant-alternates: normal;
+font-variant-caps: normal;
+font-variant-east-asian: normal;
+font-variant-emoji: normal;
+font-variant-ligatures: normal;
+font-variant-numeric: normal;
+font-variant-position: normal;
+font-variation-settings: normal;
+font-weight: 400;
+height: 38px;
+justify-items: center;
+letter-spacing: normal /*UA*/;
+line-height: normal;
+padding-block-end: 1px /*UA*/;
+padding-block-start: 1px /*UA*/;
+padding-inline-end: 6px /*UA*/;
+padding-inline-start: 6px /*UA*/;
+text-align: center /*UA*/;
+text-indent: 0px /*UA*/;
+text-rendering: auto /*UA*/;
+text-shadow: none /*UA*/;
+text-transform: none /*UA*/;
+visibility: visible /*UA*/;
+width: 38px;
+word-spacing: 0px /*UA*/;
+
+/* CSS variables */
+--body: "DM Sans","Segoe UI",sans-serif;
+--line: #d8e1da;
+--ink: #172d27;
+```
